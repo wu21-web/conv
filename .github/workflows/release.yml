@@ -1,0 +1,142 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Check formatting
+        run: |
+          set -euo pipefail
+          unformatted="$(gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "gofmt is required for:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  release:
+    name: release
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Require a signed tag
+        if: false
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null; then
+            echo "tag ${TAG} does not exist" >&2
+            exit 1
+          fi
+          sha="$(git rev-parse "${TAG}^{tag}" 2>/dev/null || true)"
+          if [ -z "${sha}" ]; then
+            echo "tag ${TAG} is lightweight; conv releases require a signed annotated tag" >&2
+            exit 1
+          fi
+          verified="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${sha}" --jq '.verification.verified')"
+          if [ "${verified}" != "true" ]; then
+            echo "tag ${TAG} is not verified by GitHub; push a signed tag first" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          outdir="dist"
+          root="$(pwd)"
+          mkdir -p "${outdir}"
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos="${target%%/*}"
+            goarch="${target##*/}"
+            binary="conv"
+            if [ "${goos}" = "windows" ]; then
+              binary="conv.exe"
+            fi
+            stage="$(mktemp -d)"
+            GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 go build -trimpath \
+              -ldflags "-s -w -X github.com/wu21-web/conv/internal/version.Build=${TAG}" \
+              -o "${stage}/${binary}" ./cmd/conv
+            cp LICENSE "${stage}/LICENSE"
+            if [ -f README.md ]; then
+              cp README.md "${stage}/README.md"
+            fi
+            name="conv_${version}_${goos}_${goarch}"
+            if [ "${goos}" = "windows" ]; then
+              (cd "${stage}" && zip -qr "${root}/${outdir}/${name}.zip" .)
+            else
+              tar -czf "${outdir}/${name}.tar.gz" -C "${stage}" .
+            fi
+            go version -m "${stage}/${binary}"
+            rm -rf "${stage}"
+          done
+          (cd "${outdir}" && sha256sum ./*.tar.gz ./*.zip > "conv_${version}_checksums.txt")
+          cat "dist/conv_${version}_checksums.txt"
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" dist/* --clobber
+            exit 0
+          fi
+          args=(release create "${TAG}" --verify-tag --title "${TAG}" --generate-notes)
+          if [[ "${TAG}" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh "${args[@]}" dist/*
+
+      - name: Summarize
+        if: false
+        run: |
+          set -euo pipefail
+          {
+            echo "### ${TAG}"
+            echo
+            echo '```'
+            cat dist/*checksums.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
