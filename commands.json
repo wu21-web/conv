@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "id": "ffmpeg-to-mp4",
+      "name": "FFmpeg",
+      "bin": "ffmpeg",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["mov", "mpeg", "mpg", "avi", "mkv", "webm", "m4v"],
+      "output": "mp4",
+      "args": ["-nostdin", "-n", "-i", "{input}", "{output}"]
+    },
+    {
+      "id": "ffmpeg-to-webm",
+      "name": "FFmpeg",
+      "bin": "ffmpeg",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["mov", "mp4", "mpeg", "mpg", "avi", "mkv", "m4v"],
+      "output": "webm",
+      "args": ["-nostdin", "-n", "-i", "{input}", "{output}"]
+    },
+    {
+      "id": "ffmpeg-to-m4a",
+      "name": "FFmpeg",
+      "bin": "ffmpeg",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["mp3", "wav", "flac", "ogg", "opus", "aac"],
+      "output": "m4a",
+      "args": ["-nostdin", "-n", "-i", "{input}", "-vn", "{output}"]
+    },
+    {
+      "id": "ffmpeg-to-mp3",
+      "name": "FFmpeg",
+      "bin": "ffmpeg",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["wav", "flac", "m4a", "aac", "ogg", "opus", "aiff", "wma"],
+      "output": "mp3",
+      "args": ["-nostdin", "-n", "-i", "{input}", "-vn", "{output}"]
+    },
+    {
+      "id": "ffmpeg-to-wav",
+      "name": "FFmpeg",
+      "bin": "ffmpeg",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["mp3", "m4a", "aac", "flac", "ogg", "opus", "aiff", "wma", "wav"],
+      "output": "wav",
+      "args": ["-nostdin", "-n", "-i", "{input}", "-vn", "{output}"]
+    },
+    {
+      "id": "magick-jpeg-to-png",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["jpg", "jpeg"],
+      "output": "png",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-png-to-jpeg",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["png"],
+      "output": "jpg",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-png-to-jpg-alias",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["png"],
+      "output": "jpeg",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-png-to-tiff",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["png"],
+      "output": "tiff",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-jpeg-to-tiff",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["jpg", "jpeg"],
+      "output": "tiff",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-tiff-to-png",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tif", "tiff"],
+      "output": "png",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-bmp-to-png",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["bmp"],
+      "output": "png",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "magick-tiff-to-jpeg",
+      "name": "ImageMagick",
+      "bin": "magick",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tif", "tiff"],
+      "output": "jpg",
+      "args": ["{input}", "{output}"]
+    },
+    {
+      "id": "pandoc-markdown-to-docx",
+      "name": "Pandoc",
+      "bin": "pandoc",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["md", "markdown"],
+      "output": "docx",
+      "args": ["--from=markdown", "--to=docx", "{input}", "--output", "{output}"]
+    },
+    {
+      "id": "pandoc-markdown-to-html",
+      "name": "Pandoc",
+      "bin": "pandoc",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["md", "markdown"],
+      "output": "html",
+      "args": ["--from=markdown", "--to=html", "{input}", "--output", "{output}"]
+    },
+    {
+      "id": "pandoc-html-to-docx",
+      "name": "Pandoc",
+      "bin": "pandoc",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["html", "htm"],
+      "output": "docx",
+      "args": ["--from=html", "--to=docx", "{input}", "--output", "{output}"]
+    },
+    {
+      "id": "pandoc-html-to-markdown",
+      "name": "Pandoc",
+      "bin": "pandoc",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["html", "htm"],
+      "output": "md",
+      "args": ["--from=html", "--to=markdown", "{input}", "--output", "{output}"]
+    },
+    {
+      "id": "pandoc-docx-to-markdown",
+      "name": "Pandoc",
+      "bin": "pandoc",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["docx"],
+      "output": "md",
+      "args": ["--from=docx", "--to=markdown", "{input}", "--output", "{output}"]
+    }
+  ]
+}
