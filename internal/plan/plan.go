@@ -28,6 +28,21 @@ func planError(format string, args ...any) *Error {
 	return &Error{ExitCode: 1, Message: fmt.Sprintf(format, args...)}
 }
 
+// archiveExts mark inputs whose real support needs archive semantics rather
+// than a one-file-to-one-file recipe. See the roadmap.
+var archiveExts = map[string]bool{
+	"zip": true, "tar": true, "gz": true, "tgz": true, "bz2": true,
+	"tbz2": true, "xz": true, "txz": true, "zst": true, "7z": true, "rar": true,
+}
+
+func unregisteredInput(base string) *Error {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(base), "."))
+	if archiveExts[ext] {
+		return planError("%s: no recipe accepts this input; archive and compression support is not implemented in this release", base)
+	}
+	return planError("%s: no recipe accepts this input; its extension is not registered", base)
+}
+
 type Options struct {
 	Inputs    []string
 	Dest      string
@@ -59,6 +74,15 @@ func Build(reg *registry.Registry, opts Options, lg *log.Logger) (*Plan, error) 
 	inputs, err := resolveInputs(opts.Inputs)
 	if err != nil {
 		return nil, err
+	}
+	// An unknown input format blocks planning whatever the destination is, so
+	// report it before the destination rules that only concern the CLI shape.
+	inputExts := make([]string, len(inputs))
+	for i, input := range inputs {
+		inputExts[i] = reg.LongestInputExt(filepath.Base(input))
+		if inputExts[i] == "" {
+			return nil, unregisteredInput(filepath.Base(input))
+		}
 	}
 	dirOutput, createDir, err := classifyDestination(opts.Dest)
 	if err != nil {
@@ -98,10 +122,7 @@ func Build(reg *registry.Registry, opts Options, lg *log.Logger) (*Plan, error) 
 	outputs := map[string]string{}
 	for i, input := range inputs {
 		base := filepath.Base(input)
-		inputExt := reg.LongestInputExt(base)
-		if inputExt == "" {
-			return nil, planError("%s: no recipe accepts this input; its extension is not registered", base)
-		}
+		inputExt := inputExts[i]
 
 		var outputExt, outputPath string
 		if dirOutput {

@@ -144,6 +144,7 @@ func TestPlanningRejections(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "other.jpg"), "y")
 	writeFile(t, filepath.Join(dir, "notes.md"), "z")
 	writeFile(t, filepath.Join(dir, "exists.png"), "old")
+	writeFile(t, filepath.Join(dir, "bundle.tar.gz"), "old")
 	out := filepath.Join(dir, "out")
 
 	tests := []struct {
@@ -180,6 +181,22 @@ func TestPlanningRejections(t *testing.T) {
 			opts:     Options{Inputs: []string{filepath.Join(dir, "notes.md")}, Dest: filepath.Join(dir, "new.png")},
 			code:     1,
 			want:     "no recipe accepts this input",
+		},
+		{
+			// The missing --ext must not be the headline when the input has no
+			// recipe at all: --ext would not make this conversion work.
+			name:     "archive input to directory without ext",
+			document: testRegistry,
+			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.tar.gz")}, Dest: out + "/"},
+			code:     1,
+			want:     "archive and compression support is not implemented",
+		},
+		{
+			name:     "archive input to directory with ext",
+			document: testRegistry,
+			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.tar.gz")}, Dest: out + "/", Ext: "png", HasExt: true},
+			code:     1,
+			want:     "archive and compression support is not implemented",
 		},
 		{
 			name:     "unregistered target extension",
