@@ -127,7 +127,7 @@ func TestExecutePublishesStagedOutput(t *testing.T) {
 func TestExecuteKeepsFilenamesLiteral(t *testing.T) {
 	bin := backendOnPath(t)
 	dir := t.TempDir()
-	name := "weird $(touch pwned) 'quote' * ; & |.in"
+	name := "weird $(touch pwned) 'quote' & ; ~ !.in"
 	input := writeInput(t, dir, name, "payload")
 	output := filepath.Join(dir, "out", "result.out")
 	if err := os.Mkdir(filepath.Join(dir, "out"), 0o755); err != nil {
