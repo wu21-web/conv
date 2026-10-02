@@ -48,17 +48,17 @@ func expandInput(spec string) ([]string, error) {
 		if err := checkInputMode(spec, info); err != nil {
 			return nil, err
 		}
-		abs, err := filepath.Abs(filepath.Clean(spec))
+		abs, err := absoluteInput(spec)
 		if err != nil {
-			return nil, planError("cannot resolve input %q: %v", spec, err)
+			return nil, err
 		}
 		return []string{abs}, nil
 	}
-	if !os.IsNotExist(err) {
-		return nil, planError("cannot inspect input %q: %v", spec, err)
-	}
+	// A failed stat of a pattern is not fatal: Windows reports an invalid-name
+	// error for names that still contain metacharacters, so those specs have to
+	// reach the glob expansion below.
 	if !hasGlobMeta(spec) {
-		return nil, planError("input not found: %q", spec)
+		return nil, statFailure(spec, err)
 	}
 	matches, err := filepath.Glob(spec)
 	if err != nil {
@@ -77,13 +77,29 @@ func expandInput(spec string) ([]string, error) {
 		if err := checkInputMode(match, info); err != nil {
 			return nil, err
 		}
-		abs, err := filepath.Abs(filepath.Clean(match))
+		abs, err := absoluteInput(match)
 		if err != nil {
-			return nil, planError("cannot resolve input %q: %v", match, err)
+			return nil, err
 		}
 		out = append(out, abs)
 	}
 	return out, nil
+}
+
+// statFailure classifies a failed stat of a literal input path.
+func statFailure(spec string, err error) error {
+	if os.IsNotExist(err) {
+		return planError("input not found: %q", spec)
+	}
+	return planError("cannot inspect input %q: %v", spec, err)
+}
+
+func absoluteInput(path string) (string, error) {
+	abs, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return "", planError("cannot resolve input %q: %v", path, err)
+	}
+	return abs, nil
 }
 
 func checkInputMode(path string, info os.FileInfo) error {

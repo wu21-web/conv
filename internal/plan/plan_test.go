@@ -3,6 +3,7 @@ package plan
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -336,6 +337,40 @@ func TestGlobExpansion(t *testing.T) {
 		if !errors.As(err, &planErr) || planErr.ExitCode != 2 {
 			t.Fatalf("malformed glob exit code = %v, want 2", err)
 		}
+	}
+}
+
+// A failing stat of a pattern is not necessarily "not found": Windows reports
+// an invalid-name error for names that still contain metacharacters, and the
+// resolver has to expand those instead of reporting the path as unusable.
+func TestPatternWithFailingStatIsExpanded(t *testing.T) {
+	dir := t.TempDir()
+	longPattern := filepath.Join(dir, strings.Repeat("a", 300)+"*.jpg")
+	_, err := build(t, testRegistry, Options{
+		Inputs: []string{longPattern},
+		Dest:   filepath.Join(dir, "out") + "/",
+		Ext:    "png",
+		HasExt: true,
+	})
+	if err == nil {
+		t.Fatal("expected an unmatched pattern to fail")
+	}
+	if !strings.Contains(err.Error(), "no files match") {
+		t.Fatalf("error = %v, want the spec to be treated as a pattern", err)
+	}
+}
+
+func TestStatFailureClassification(t *testing.T) {
+	missing := statFailure("photo.jpg", fs.ErrNotExist)
+	if !strings.Contains(missing.Error(), `input not found: "photo.jpg"`) {
+		t.Errorf("missing input error = %q", missing)
+	}
+	unreadable := statFailure("photo.jpg", fs.ErrPermission)
+	if !strings.Contains(unreadable.Error(), "cannot inspect input") {
+		t.Errorf("unreadable input error = %q", unreadable)
+	}
+	if !strings.Contains(unreadable.Error(), "permission denied") {
+		t.Errorf("unreadable input error should keep the cause: %q", unreadable)
 	}
 }
 
