@@ -479,7 +479,8 @@ func TestRenderShowsStdoutCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	if text := Render(p, 1); !strings.Contains(text, `capture: stdout -> "<staged>/photo.png"`) {
+	want := `capture: stdout -> "` + filepath.Join("<staged>", "photo.png") + `"`
+	if text := Render(p, 1); !strings.Contains(text, want) {
 		t.Fatalf("plan should show where stdout goes:\n%s", text)
 	}
 }
