@@ -4,10 +4,10 @@ This markdown file contains security policy for `wu21-web/conv`.
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| Last Release   | :white_check_mark: |
-| Preleases   | :x:                |
+| Version      | Supported          |
+| ------------ | ------------------ |
+| Last Release | :white_check_mark: |
+| Preleases    | :x:                |
 
 ## Understanding Your Vulnerability Report
 
@@ -24,7 +24,7 @@ If the vulnerability is still effective or the PoC still works, you can file in 
 
 ## Roadmap
 
-Note that we might add a `vulnerablities.json` to disable vulnerable versions of backend binaries. 
+Note that we might add a `vulnerablities.json` to disable vulnerable versions of backend binaries.
 A `--[no-]safe` flag might be implemented in a later release to bypass this safety restriction.
 
 ## Reporting a Vulnerability
