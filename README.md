@@ -10,7 +10,12 @@ conv '*.mov' converted/ --ext mp4 --jobs 2
 ```
 
 Direct, one-file-to-one-file conversions through
-FFmpeg, ImageMagick's `magick`, and Pandoc. ~~Glob mode and wildcard patterns are on the roadmap, not in this release.~~
+FFmpeg, ImageMagick's `magick`, Pandoc, and the standard compression tools. ~~Glob mode and wildcard patterns are on the roadmap, not in this release.~~
+
+```sh
+conv x.tar x.tar.gz # Compress a tar archive.
+conv x.tar.gz x.tar # And decompress it again.
+```
 
 ## Prerequisites
 
@@ -20,6 +25,7 @@ FFmpeg, ImageMagick's `magick`, and Pandoc. ~~Glob mode and wildcard patterns ar
 - FFmpeg (`ffmpeg`) for audio and video
 - ImageMagick 7 (`magick`) for images
 - Pandoc (`pandoc`) for documents
+- `gzip`, `bzip2`, `xz` and/or `zstd` for compressed tar archives
 
 Commands (including GNU flavoured tools) must be in `PATH` if you want to use them.
 
@@ -45,7 +51,7 @@ conv -v
 ## Supported conversion pairs
 
 Support conversions pairs are restricted by the backend, not conv, unless conv missed a supported pair or solution in `command.json`. Contributions are welcome.
-Note that we plan to extend backend to other I/O utilities like `tar` and `gzip`. Conv's aim is to build a converter that converts just about anything.
+Compressed tar archives are registered for `gzip`, `bzip2`, `xz` and `zstd`. Creating and extracting archives themselves is still planned, see the roadmap. Conv's aim is to build a converter that converts just about anything.
 
 | Backend     | Input extensions                               | Output |
 | ----------- | ---------------------------------------------- | ------ |
@@ -67,6 +73,17 @@ Note that we plan to extend backend to other I/O utilities like `tar` and `gzip`
 | Pandoc      | html, htm                                      | docx   |
 | Pandoc      | html, htm                                      | md     |
 | Pandoc      | docx                                           | md     |
+| gzip        | tar                                            | gz     |
+| gzip        | gz                                             | tar    |
+| bzip2       | tar                                            | bz2    |
+| bzip2       | bz2                                            | tar    |
+| xz          | tar                                            | xz     |
+| xz          | xz                                             | tar    |
+| zstd        | tar                                            | zst    |
+| zstd        | zst                                            | tar    |
+
+> [!NOTE]
+> `gzip`, `bzip2` and `xz` have no output-path option and compress in place by default, which would delete your input. Those recipes stream the result on stdout instead, and conv captures the stream into the staged output. `zstd` accepts `-o`, so it writes the file itself.
 
 ## Usage
 
@@ -150,12 +167,11 @@ Two failures that look similar but reported differently:
 
 ## Roadmap
 
-We are trying to register GNU flavoured tools and adapt other major I/O utilities like `gzip` and `tar`.
-Proposed as following:
+GNU flavoured tool variants are still to be registered. Compressing and decompressing tar archives landed with `gzip`, `bzip2`, `xz` and `zstd`; what is left is the archive layer itself, which does not fit the one-file-to-one-file model, because it changes how many files go in and come out:
 
 ```sh
-./conv archive.tar.gz archive/
-./conv archive/ archive.tar.gz
+./conv archive.tar.gz archive/ # Extraction: one input, a directory tree out.
+./conv archive/ archive.tar.gz # Packing: a directory tree in, one file out.
 ```
 
 ## Dry run
@@ -179,6 +195,17 @@ output directory: /home/me/out (will be created)
 ```
 
 Codex plan mode alike, allows you to see if the conversion is possible or not.
+
+```console
+$ ./conv x.tar x.tar.gz --dry-run
+conv dry run: 1 conversion(s), jobs=1
+[1] /home/me/x.tar -> /home/me/x.tar.gz
+    input:  tar
+    recipe: gzip-tar-to-gz (gzip) priority=100 implementation=other
+    backend: /usr/bin/gzip
+    argv: /usr/bin/gzip -c -n -- /home/me/x.tar
+    capture: stdout -> "<staged>/x.tar.gz"
+```
 
 ## Concurrency
 
@@ -245,6 +272,24 @@ and `args`; `priority` is optional and defaults to `0`. Recipes that are
 equivalent alternatives can share a `variant_group` so `--gnu` and `--no-gnu` can choose
 between them. A `variant_group` is only valid on recipes whose
 `implementation` is `"gnu"` or `"native"`.
+
+`output_mode` is optional and defaults to `"file"`, which means the backend writes the path given as `{output}`. Set it to `"stdout"` when the backend can only stream its result, and conv will capture that stream into the staged output file:
+
+```json
+{
+  "id": "gzip-tar-to-gz",
+  "name": "gzip",
+  "bin": "gzip",
+  "implementation": "other",
+  "priority": 100,
+  "inputs": ["tar"],
+  "output": "gz",
+  "output_mode": "stdout",
+  "args": ["-c", "-n", "--", "{input}"]
+}
+```
+
+A `"stdout"` recipe must not reference `{output}` in its args, because conv owns the output file; asking for both is rejected when the registry loads.
 
 ## Development
 
