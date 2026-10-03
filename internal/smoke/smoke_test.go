@@ -4,6 +4,8 @@
 package smoke
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -149,6 +151,46 @@ func TestSmokePandoc(t *testing.T) {
 	record(t, "%s md->html: RAN (ok)", backend)
 }
 
+func TestSmokeGzip(t *testing.T) {
+	const backend = "gzip"
+	if _, err := exec.LookPath(backend); err != nil {
+		record(t, "%s tar->gz: SKIPPED (executable not installed)", backend)
+		t.Skipf("%s is not installed", backend)
+	}
+	dir := t.TempDir()
+	input := filepath.Join(dir, "bundle.tar")
+	if err := os.WriteFile(input, tinyTar(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	compressed := filepath.Join(dir, "bundle.tar.gz")
+	if err := convertThroughConv(t, input, compressed, ""); err != nil {
+		record(t, "%s tar->gz: BACKEND ERROR (%v)", backend, firstLine(err))
+		t.Skipf("%s could not compress the fixture: %v", backend, err)
+	}
+	checkPublished(t, compressed)
+
+	restored := filepath.Join(dir, "restored.tar")
+	if err := convertThroughConv(t, compressed, restored, ""); err != nil {
+		record(t, "%s gz->tar: BACKEND ERROR (%v)", backend, firstLine(err))
+		t.Skipf("%s could not decompress the fixture: %v", backend, err)
+	}
+	checkPublished(t, restored)
+	original, err := os.ReadFile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roundTripped, err := os.ReadFile(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(original, roundTripped) {
+		record(t, "%s tar->gz->tar: BACKEND ERROR (round trip changed the archive)", backend)
+		t.Fatalf("round trip changed the archive")
+	}
+	record(t, "%s tar->gz->tar: RAN (ok)", backend)
+}
+
 // TestSmokeReport prints the record of what actually ran. It must stay last in
 // this file so that the report sees every result.
 func TestSmokeReport(t *testing.T) {
@@ -221,4 +263,26 @@ func tinyWAV() []byte {
 		data = append(data, sample[:]...)
 	}
 	return data
+}
+
+func tinyTar(t *testing.T) []byte {
+	t.Helper()
+	body := []byte("conv smoke fixture\n")
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name:     "payload.txt",
+		Mode:     0o644,
+		Size:     int64(len(body)),
+		Typeflag: tar.TypeReg,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(body); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

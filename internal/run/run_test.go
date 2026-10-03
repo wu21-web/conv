@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,16 @@ func backendOnPath(t *testing.T) string {
 
 func newRecipe(t *testing.T, id, bin string, args ...string) registry.Recipe {
 	t.Helper()
+	return buildRecipe(t, id, bin, "", args)
+}
+
+func newStdoutRecipe(t *testing.T, id, bin string, args ...string) registry.Recipe {
+	t.Helper()
+	return buildRecipe(t, id, bin, "stdout", args)
+}
+
+func buildRecipe(t *testing.T, id, bin, mode string, args []string) registry.Recipe {
+	t.Helper()
 	recipe := map[string]any{
 		"id":             id,
 		"name":           id,
@@ -42,6 +53,9 @@ func newRecipe(t *testing.T, id, bin string, args ...string) registry.Recipe {
 		"inputs":         []string{"in"},
 		"output":         "out",
 		"args":           args,
+	}
+	if mode != "" {
+		recipe["output_mode"] = mode
 	}
 	doc, err := json.Marshal(map[string]any{"version": 1, "recipes": []any{recipe}})
 	if err != nil {
@@ -121,6 +135,88 @@ func TestExecutePublishesStagedOutput(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "source.in -> "+output) {
 		t.Fatalf("status output = %q", stderr.String())
+	}
+}
+
+func TestExecuteCapturesStdout(t *testing.T) {
+	bin := backendOnPath(t)
+	dir := t.TempDir()
+	input := writeInput(t, dir, "source.in", "payload")
+	output := filepath.Join(dir, "result.out")
+	recipe := newStdoutRecipe(t, "capture", bin, "--mode", "stdout", "--in", "{input}")
+
+	var stdout, stderr bytes.Buffer
+	lg := log.New(log.Normal, &stdout, &stderr)
+	result := Execute(context.Background(), &plan.Plan{Jobs: []plan.Job{job(t, 0, recipe, input, output)}}, Options{Jobs: 1, Log: lg})
+
+	if result.Succeeded != 1 || result.Failed != 0 || result.Canceled {
+		t.Fatalf("result = %+v (%s)", result, stderr.String())
+	}
+	data, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatalf("output: %v", err)
+	}
+	if string(data) != "payload" {
+		t.Fatalf("captured output = %q", data)
+	}
+	if body, err := os.ReadFile(input); err != nil || string(body) != "payload" {
+		t.Fatalf("input changed: %q, %v", body, err)
+	}
+	if leftovers := stagingLeftovers(t, dir); len(leftovers) != 0 {
+		t.Fatalf("staging directories left behind: %v", leftovers)
+	}
+}
+
+func TestExecuteStdoutWithoutDataFails(t *testing.T) {
+	bin := backendOnPath(t)
+	dir := t.TempDir()
+	input := writeInput(t, dir, "source.in", "payload")
+	output := filepath.Join(dir, "result.out")
+	recipe := newStdoutRecipe(t, "empty", bin, "--mode", "nocreate", "--in", "{input}")
+
+	var stderr bytes.Buffer
+	lg := log.New(log.Normal, io.Discard, &stderr)
+	result := Execute(context.Background(), &plan.Plan{Jobs: []plan.Job{job(t, 0, recipe, input, output)}}, Options{Jobs: 1, Log: lg})
+
+	if result.Failed != 1 || result.Succeeded != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("output exists after an empty stream: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "wrote no data to stdout") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if leftovers := stagingLeftovers(t, dir); len(leftovers) != 0 {
+		t.Fatalf("staging directories left behind: %v", leftovers)
+	}
+}
+
+// A backend that streams its result and then fails used to spill that stream
+// into the error tail, which is how raw gzip bytes ended up in conv's output.
+func TestExecuteStdoutKeepsDiagnosticsSeparate(t *testing.T) {
+	bin := backendOnPath(t)
+	dir := t.TempDir()
+	input := writeInput(t, dir, "source.in", "payload")
+	output := filepath.Join(dir, "result.out")
+	recipe := newStdoutRecipe(t, "leak", bin,
+		"--mode", "stdout-fail", "--in", "{input}", "--marker", "boom", "--exit", "3")
+
+	var stderr bytes.Buffer
+	lg := log.New(log.Normal, io.Discard, &stderr)
+	result := Execute(context.Background(), &plan.Plan{Jobs: []plan.Job{job(t, 0, recipe, input, output)}}, Options{Jobs: 1, Log: lg})
+
+	if result.Failed != 1 {
+		t.Fatalf("result = %+v", result)
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("failed job published output: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "boom") {
+		t.Fatalf("backend cause missing from %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "payload") {
+		t.Fatalf("backend stdout leaked into diagnostics: %q", stderr.String())
 	}
 }
 

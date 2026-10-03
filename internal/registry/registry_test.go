@@ -68,6 +68,9 @@ func TestLoadJSONValidation(t *testing.T) {
 		{"empty placeholder", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{}","{input}","{output}"]}]}`, "unsupported placeholder"},
 		{"no input placeholder", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{output}"]}]}`, "{input}"},
 		{"no output placeholder", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{input}"]}]}`, "{output}"},
+		{"unknown output mode", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{input}"],"output_mode":"pipe"}]}`, "output_mode"},
+		{"stdout mode with output placeholder", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{input}","{output}"],"output_mode":"stdout"}]}`, "must not reference {output}"},
+		{"empty args", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":[]}]}`, "args must not be empty"},
 		{"variant group on other implementation", `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{input}","{output}"],"variant_group":"g"}]}`, "variant_group"},
 		{"variant group mixes pairs", `{"version":1,"recipes":[` +
 			`{"id":"a","name":"R","bin":"true","implementation":"gnu","inputs":["a"],"output":"b","args":["{input}","{output}"],"variant_group":"g"},` +
@@ -90,6 +93,49 @@ func TestLoadJSONValidation(t *testing.T) {
 
 func recipeJSON(id string) string {
 	return `{"id":"` + id + `","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["{input}","{output}"]}`
+}
+
+func TestOutputModeDefaultsAndStdout(t *testing.T) {
+	fileMode := `{"version":1,"recipes":[` + recipeJSON("r") + `]}`
+	reg, err := LoadJSON([]byte(fileMode))
+	if err != nil {
+		t.Fatalf("file mode rejected: %v", err)
+	}
+	if got := reg.Recipes[0].OutputMode; got != OutputFile {
+		t.Fatalf("default output mode = %q, want %q", got, OutputFile)
+	}
+
+	stdoutMode := `{"version":1,"recipes":[{"id":"r","name":"R","bin":"true","implementation":"other","inputs":["a"],"output":"b","args":["-c","{input}"],"output_mode":"stdout"}]}`
+	reg, err = LoadJSON([]byte(stdoutMode))
+	if err != nil {
+		t.Fatalf("stdout mode rejected: %v", err)
+	}
+	if got := reg.Recipes[0].OutputMode; got != OutputStdout {
+		t.Fatalf("output mode = %q, want %q", got, OutputStdout)
+	}
+}
+
+// The tools without an output-path flag have to stream, and the one with -o
+// should not, which is what the built-in registry has to say.
+func TestBuiltInCompressionModes(t *testing.T) {
+	reg, err := LoadJSON(conv.DefaultRegistryJSON())
+	if err != nil {
+		t.Fatalf("built-in registry does not load: %v", err)
+	}
+	modes := map[string]OutputMode{}
+	for _, rec := range reg.Recipes {
+		modes[rec.ID] = rec.OutputMode
+	}
+	for _, id := range []string{"gzip-tar-to-gz", "gzip-gz-to-tar", "bzip2-tar-to-bz2", "bzip2-bz2-to-tar", "xz-tar-to-xz", "xz-xz-to-tar"} {
+		if modes[id] != OutputStdout {
+			t.Errorf("recipe %q output mode = %q, want %q", id, modes[id], OutputStdout)
+		}
+	}
+	for _, id := range []string{"zstd-tar-to-zst", "zstd-zst-to-tar"} {
+		if modes[id] != OutputFile {
+			t.Errorf("recipe %q output mode = %q, want %q", id, modes[id], OutputFile)
+		}
+	}
 }
 
 func TestNormalizeExt(t *testing.T) {
