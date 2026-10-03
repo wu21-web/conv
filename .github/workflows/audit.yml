@@ -26,7 +26,7 @@ jobs:
       
       - name: Autofix
         run: |
-          npx prettier -w ./README.md
+          npx prettier -w **.md
           gofmt -w $(find . -name '*.go')
 
       - uses: autofix-ci/action@v1
