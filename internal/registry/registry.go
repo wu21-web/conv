@@ -29,12 +29,24 @@ type Recipe struct {
 	Name           string
 	Bin            string
 	Implementation Implementation
+	OutputMode     OutputMode
 	Priority       int
 	Inputs         []string
 	Output         string
 	Args           []string
 	VariantGroup   string
 }
+
+// OutputMode says how a backend delivers its result.
+type OutputMode string
+
+const (
+	// OutputFile is the default: the backend writes the path given as {output}.
+	OutputFile OutputMode = "file"
+	// OutputStdout means the backend streams the result and conv captures it,
+	// which is the only non-destructive option for gzip, bzip2 and xz.
+	OutputStdout OutputMode = "stdout"
+)
 
 type Registry struct {
 	Version int
@@ -56,6 +68,7 @@ type wireRecipe struct {
 	Output         string   `json:"output"`
 	Args           []string `json:"args"`
 	VariantGroup   string   `json:"variant_group"`
+	OutputMode     string   `json:"output_mode"`
 }
 
 var (
@@ -158,6 +171,14 @@ func normalizeRecipe(w wireRecipe, index int) (Recipe, error) {
 	if !knownImpl[impl] {
 		return fail("implementation %q is not one of %q, %q, %q", w.Implementation, ImplOther, ImplGNU, ImplNative)
 	}
+	mode := OutputFile
+	switch OutputMode(w.OutputMode) {
+	case "":
+	case OutputFile, OutputStdout:
+		mode = OutputMode(w.OutputMode)
+	default:
+		return fail("output_mode %q is not one of %q, %q", w.OutputMode, OutputFile, OutputStdout)
+	}
 	inputs, err := normalizeExtList(w.Inputs)
 	if err != nil {
 		return fail("inputs: %v", err)
@@ -176,9 +197,9 @@ func normalizeRecipe(w wireRecipe, index int) (Recipe, error) {
 		return fail("missing required field %q", "args")
 	}
 	if len(w.Args) == 0 {
-		return fail("args must contain at least the %q placeholder", "{output}")
+		return fail("args must not be empty")
 	}
-	if err := validateArgs(w.Args); err != nil {
+	if err := validateArgs(w.Args, mode); err != nil {
 		return fail("%v", err)
 	}
 	if w.VariantGroup != "" {
@@ -195,6 +216,7 @@ func normalizeRecipe(w wireRecipe, index int) (Recipe, error) {
 		Name:           w.Name,
 		Bin:            w.Bin,
 		Implementation: impl,
+		OutputMode:     mode,
 		Inputs:         inputs,
 		Output:         output,
 		Args:           append([]string(nil), w.Args...),
@@ -223,7 +245,7 @@ func normalizeExtList(raw []string) ([]string, error) {
 	return out, nil
 }
 
-func validateArgs(args []string) error {
+func validateArgs(args []string, mode OutputMode) error {
 	hasInput, hasOutput := false, false
 	for _, arg := range args {
 		if strings.ContainsRune(arg, 0) {
@@ -247,7 +269,10 @@ func validateArgs(args []string) error {
 	if !hasInput {
 		return errors.New(`args must reference {input}`)
 	}
-	if !hasOutput {
+	switch {
+	case mode == OutputStdout && hasOutput:
+		return errors.New(`args must not reference {output} when output_mode is "stdout"; conv captures the backend's stdout instead`)
+	case mode == OutputFile && !hasOutput:
 		return errors.New(`args must reference {output}`)
 	}
 	return nil

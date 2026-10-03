@@ -28,17 +28,17 @@ func planError(format string, args ...any) *Error {
 	return &Error{ExitCode: 1, Message: fmt.Sprintf(format, args...)}
 }
 
-// archiveExts mark inputs whose real support needs archive semantics rather
-// than a one-file-to-one-file recipe. See the roadmap.
+// archiveExts mark inputs that need extraction or archive handling rather than
+// a one-file-to-one-file recipe. See the roadmap.
 var archiveExts = map[string]bool{
-	"zip": true, "tar": true, "gz": true, "tgz": true, "bz2": true,
-	"tbz2": true, "xz": true, "txz": true, "zst": true, "7z": true, "rar": true,
+	"zip": true, "7z": true, "rar": true, "tar": true,
+	"tgz": true, "tbz2": true, "txz": true,
 }
 
 func unregisteredInput(base string) *Error {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(base), "."))
 	if archiveExts[ext] {
-		return planError("%s: no recipe accepts this input; archive and compression support is not implemented in this release", base)
+		return planError("%s: no recipe accepts this input; archive extraction is not implemented in this release", base)
 	}
 	return planError("%s: no recipe accepts this input; its extension is not registered", base)
 }
@@ -266,6 +266,9 @@ func Render(p *Plan, workers int) string {
 		b.WriteString("\n")
 		fmt.Fprintf(&b, "    backend: %s\n", job.Bin)
 		fmt.Fprintf(&b, "    argv: %s\n", renderArgv(job.Bin, registry.Substitute(job.Recipe.Args, job.Input, staged)))
+		if job.Recipe.OutputMode == registry.OutputStdout {
+			fmt.Fprintf(&b, "    capture: stdout -> %s\n", quoteArg(staged))
+		}
 	}
 	return b.String()
 }

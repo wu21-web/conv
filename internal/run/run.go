@@ -146,11 +146,25 @@ func runJob(ctx context.Context, job plan.Job, lg *log.Logger) error {
 
 	cmd := exec.CommandContext(ctx, job.Bin, args...)
 	sink := newBackendOutput(lg, filepath.Base(job.Input))
-	if !lg.Silent() {
+	var captured *os.File
+	switch {
+	case job.Recipe.OutputMode == registry.OutputStdout:
+		if captured, err = os.Create(staged); err != nil {
+			return fmt.Errorf("cannot create staged output: %w", err)
+		}
+		cmd.Stdout = captured
+	case !lg.Silent():
 		cmd.Stdout = sink
+	}
+	if !lg.Silent() {
 		cmd.Stderr = sink
 	}
 	runErr := cmd.Run()
+	if captured != nil {
+		if err := captured.Close(); err != nil && runErr == nil {
+			runErr = err
+		}
+	}
 	sink.Flush()
 
 	if ctx.Err() != nil {
@@ -182,6 +196,9 @@ func runJob(ctx context.Context, job plan.Job, lg *log.Logger) error {
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("backend output %s is not a regular file", filepath.Base(job.Output))
+	}
+	if job.Recipe.OutputMode == registry.OutputStdout && info.Size() == 0 {
+		return fmt.Errorf("backend reported success but wrote no data to stdout")
 	}
 	if err := publish(staged, job.Output); err != nil {
 		return err

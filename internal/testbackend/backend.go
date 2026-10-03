@@ -64,8 +64,8 @@ func Main() int {
 			return fail("backend: unexpected argument %q", args[i])
 		}
 	}
-	if mode == "" || input == "" || output == "" {
-		return fail("backend: --mode, --in and --out are required (got %q, %q, %q)", mode, input, output)
+	if mode == "" || input == "" || (output == "" && !strings.HasPrefix(mode, "stdout") && mode != "nocreate") {
+		return fail("backend: --mode and --in are required, plus --out unless the mode streams to stdout (got %q, %q, %q)", mode, input, output)
 	}
 	if stderrBytes > 0 {
 		noise := strings.Repeat("diagnostic-noise-", stderrBytes/16+1)
@@ -95,6 +95,25 @@ func Main() int {
 			return fail("backend: %v", err)
 		}
 		return 0
+	case "stdout":
+		data, err := os.ReadFile(input)
+		if err != nil {
+			return fail("backend: %v", err)
+		}
+		if _, err := os.Stdout.Write(data); err != nil {
+			return fail("backend: %v", err)
+		}
+		return 0
+	case "stdout-fail":
+		data, err := os.ReadFile(input)
+		if err != nil {
+			return fail("backend: %v", err)
+		}
+		if _, err := os.Stdout.Write(data); err != nil {
+			return fail("backend: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "%s\n", marker)
+		return exitCode
 	case "fail":
 		fmt.Fprintf(os.Stderr, "%s\n", marker)
 		return exitCode

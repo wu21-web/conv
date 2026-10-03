@@ -144,7 +144,7 @@ func TestPlanningRejections(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "other.jpg"), "y")
 	writeFile(t, filepath.Join(dir, "notes.md"), "z")
 	writeFile(t, filepath.Join(dir, "exists.png"), "old")
-	writeFile(t, filepath.Join(dir, "bundle.tar.gz"), "old")
+	writeFile(t, filepath.Join(dir, "bundle.zip"), "old")
 	out := filepath.Join(dir, "out")
 
 	tests := []struct {
@@ -187,16 +187,16 @@ func TestPlanningRejections(t *testing.T) {
 			// recipe at all: --ext would not make this conversion work.
 			name:     "archive input to directory without ext",
 			document: testRegistry,
-			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.tar.gz")}, Dest: out + "/"},
+			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.zip")}, Dest: out + "/"},
 			code:     1,
-			want:     "archive and compression support is not implemented",
+			want:     "archive extraction is not implemented",
 		},
 		{
 			name:     "archive input to directory with ext",
 			document: testRegistry,
-			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.tar.gz")}, Dest: out + "/", Ext: "png", HasExt: true},
+			opts:     Options{Inputs: []string{filepath.Join(dir, "bundle.zip")}, Dest: out + "/", Ext: "png", HasExt: true},
 			code:     1,
-			want:     "archive and compression support is not implemented",
+			want:     "archive extraction is not implemented",
 		},
 		{
 			name:     "unregistered target extension",
@@ -450,6 +450,37 @@ func TestRenderQuotesArguments(t *testing.T) {
 	}
 	if !strings.Contains(text, "--output=<staged>") {
 		t.Fatalf("plan should substitute inside a single argument:\n%s", text)
+	}
+}
+
+func TestRenderShowsStdoutCapture(t *testing.T) {
+	fileMode := `{"version":1,"recipes":[
+	  {"id":"r","name":"R","bin":"imgtool","implementation":"other","inputs":["jpg"],"output":"png","args":["{input}","{output}"]}]}`
+	streamMode := `{"version":1,"recipes":[
+	  {"id":"r","name":"R","bin":"imgtool","implementation":"other","inputs":["jpg"],"output":"png","output_mode":"stdout","args":["-c","{input}"]}]}`
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "photo.jpg"), "x")
+	opts := Options{
+		Inputs: []string{filepath.Join(dir, "photo.jpg")},
+		Dest:   filepath.Join(dir, "out") + "/",
+		Ext:    "png",
+		HasExt: true,
+	}
+
+	p, err := build(t, fileMode, opts)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if text := Render(p, 1); strings.Contains(text, "capture:") {
+		t.Fatalf("file mode should not mention capture:\n%s", text)
+	}
+
+	p, err = build(t, streamMode, opts)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if text := Render(p, 1); !strings.Contains(text, `capture: stdout -> "<staged>/photo.png"`) {
+		t.Fatalf("plan should show where stdout goes:\n%s", text)
 	}
 }
 

@@ -180,6 +180,92 @@
       "inputs": ["docx"],
       "output": "md",
       "args": ["--from=docx", "--to=markdown", "{input}", "--output", "{output}"]
+    },
+    {
+      "id": "gzip-tar-to-gz",
+      "name": "gzip",
+      "bin": "gzip",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tar"],
+      "output": "gz",
+      "output_mode": "stdout",
+      "args": ["-c", "-n", "--", "{input}"]
+    },
+    {
+      "id": "gzip-gz-to-tar",
+      "name": "gzip",
+      "bin": "gzip",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["gz"],
+      "output": "tar",
+      "output_mode": "stdout",
+      "args": ["-c", "-d", "--", "{input}"]
+    },
+    {
+      "id": "bzip2-tar-to-bz2",
+      "name": "bzip2",
+      "bin": "bzip2",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tar"],
+      "output": "bz2",
+      "output_mode": "stdout",
+      "args": ["-c", "--", "{input}"]
+    },
+    {
+      "id": "bzip2-bz2-to-tar",
+      "name": "bzip2",
+      "bin": "bzip2",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["bz2"],
+      "output": "tar",
+      "output_mode": "stdout",
+      "args": ["-c", "-d", "--", "{input}"]
+    },
+    {
+      "id": "xz-tar-to-xz",
+      "name": "xz",
+      "bin": "xz",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tar"],
+      "output": "xz",
+      "output_mode": "stdout",
+      "args": ["-c", "--", "{input}"]
+    },
+    {
+      "id": "xz-xz-to-tar",
+      "name": "xz",
+      "bin": "xz",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["xz"],
+      "output": "tar",
+      "output_mode": "stdout",
+      "args": ["-c", "-d", "--", "{input}"]
+    },
+    {
+      "id": "zstd-tar-to-zst",
+      "name": "zstd",
+      "bin": "zstd",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["tar"],
+      "output": "zst",
+      "args": ["-q", "-f", "-o", "{output}", "--", "{input}"]
+    },
+    {
+      "id": "zstd-zst-to-tar",
+      "name": "zstd",
+      "bin": "zstd",
+      "implementation": "other",
+      "priority": 100,
+      "inputs": ["zst"],
+      "output": "tar",
+      "args": ["-q", "-f", "-d", "-o", "{output}", "--", "{input}"]
     }
   ]
 }
