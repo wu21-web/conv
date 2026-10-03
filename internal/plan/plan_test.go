@@ -479,8 +479,13 @@ func TestRenderShowsStdoutCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
-	want := `capture: stdout -> "` + filepath.Join("<staged>", "photo.png") + `"`
-	if text := Render(p, 1); !strings.Contains(text, want) {
+	text := Render(p, 1)
+	if !strings.Contains(text, "capture: stdout -> ") {
+		t.Fatalf("plan should mention the capture:\n%s", text)
+	}
+	// Backslashes are escaped by the same quoting the argv line uses, so the
+	// expectation has to come from that helper rather than a literal path.
+	if want := "capture: stdout -> " + quoteArg(filepath.Join("<staged>", "photo.png")); !strings.Contains(text, want) {
 		t.Fatalf("plan should show where stdout goes:\n%s", text)
 	}
 }
